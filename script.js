@@ -28,186 +28,245 @@ const canvas = document.getElementById('canvas');
 const captureButton = document.getElementById('captureButton');
 const cancelCameraButton = document.getElementById('cancelCameraButton');
 const sendPhotoButton = document.getElementById('sendPhotoButton');
+const editUserButton = document.getElementById('editUserButton');
 
-// Estado do usuário e câmera
+// Estado do aplicativo
 let currentUser = {
     id: localStorage.getItem('userId') || 'user_' + Math.random().toString(36).substr(2, 9),
     name: localStorage.getItem('userName') || null
 };
 let stream = null;
+let isEditingUser = false;
 
 // Inicialização
-if (!currentUser.name) {
-    userModal.style.display = 'block';
-} else {
-    loadMessages();
-}
-
-// Função para salvar usuário
-saveUserButton.addEventListener('click', () => {
-    const name = userNameInput.value.trim();
-    if (name) {
-        currentUser.name = name;
-        localStorage.setItem('userId', currentUser.id);
-        localStorage.setItem('userName', name);
-        userModal.style.display = 'none';
+function init() {
+    setupEventListeners();
+    
+    if (!currentUser.name) {
+        showUserModal(false);
+    } else {
         loadMessages();
         messageInput.focus();
-    } else {
-        alert('Por favor, digite um nome válido');
-    }
-});
-
-// Função para enviar mensagem de texto
-async function sendMessage() {
-    const text = messageInput.value.trim();
-    if (text && currentUser.name) {
-        try {
-            await db.collection('messages').add({
-                userId: currentUser.id,
-                userName: currentUser.name,
-                content: text,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            messageInput.value = '';
-        } catch (error) {
-            console.error("Erro ao enviar mensagem:", error);
-            alert("Erro ao enviar mensagem. Tente novamente.");
-        }
     }
 }
 
-// Função para carregar mensagens
+// Configura todos os event listeners
+function setupEventListeners() {
+    // Envio de mensagem
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    // Câmera
+    cameraButton.addEventListener('click', openCamera);
+    captureButton.addEventListener('click', capturePhoto);
+    sendPhotoButton.addEventListener('click', sendPhoto);
+    cancelCameraButton.addEventListener('click', closeCamera);
+
+    // Usuário
+    saveUserButton.addEventListener('click', saveUser);
+    editUserButton.addEventListener('click', () => showUserModal(true));
+}
+
+// Mostra o modal de usuário
+function showUserModal(editing) {
+    isEditingUser = editing;
+    userModal.style.display = 'block';
+    userNameInput.value = currentUser.name || '';
+    saveUserButton.textContent = editing ? 'Salvar Alterações' : 'Entrar no Chat';
+    userNameInput.focus();
+    
+    if (editing) {
+        userNameInput.select();
+    }
+}
+
+// Salva ou atualiza o usuário
+async function saveUser() {
+    const newName = userNameInput.value.trim();
+    
+    if (!newName) {
+        alert('Por favor, digite um nome válido');
+        return;
+    }
+
+    try {
+        // Atualiza o localStorage
+        currentUser.name = newName;
+        localStorage.setItem('userId', currentUser.id);
+        localStorage.setItem('userName', newName);
+
+        // Se estiver editando, atualiza as mensagens existentes
+        if (isEditingUser) {
+            await updateExistingMessages(newName);
+        }
+
+        userModal.style.display = 'none';
+        
+        if (!isEditingUser) {
+            loadMessages();
+            messageInput.focus();
+        }
+    } catch (error) {
+        console.error('Erro ao salvar usuário:', error);
+        alert('Erro ao salvar. Tente novamente.');
+    }
+}
+
+// Atualiza mensagens existentes com novo nome
+async function updateExistingMessages(newName) {
+    try {
+        const messages = await db.collection('messages')
+            .where('userId', '==', currentUser.id)
+            .get();
+
+        const batch = db.batch();
+        messages.forEach(doc => {
+            batch.update(doc.ref, { userName: newName });
+        });
+
+        await batch.commit();
+    } catch (error) {
+        console.error('Erro ao atualizar mensagens:', error);
+        throw error;
+    }
+}
+
+// Envia mensagem de texto
+async function sendMessage() {
+    const text = messageInput.value.trim();
+    
+    if (!text || !currentUser.name) return;
+
+    try {
+        await db.collection('messages').add({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            content: text,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        messageInput.value = '';
+    } catch (error) {
+        console.error('Erro ao enviar mensagem:', error);
+        alert('Erro ao enviar mensagem. Tente novamente.');
+    }
+}
+
+// Carrega mensagens do chat
 function loadMessages() {
     db.collection('messages')
         .orderBy('timestamp')
         .onSnapshot(snapshot => {
             messagesContainer.innerHTML = '';
             snapshot.forEach(doc => {
-                const msg = doc.data();
-                const messageElement = document.createElement('div');
-                messageElement.className = 'message';
-                messageElement.innerHTML = `<strong>${msg.userName}:</strong> ${msg.content || ''}`;
-                
-                if (msg.photoUrl) {
-                    const img = document.createElement('img');
-                    img.src = msg.photoUrl;
-                    img.className = 'photo-message';
-                    img.alt = 'Foto enviada';
-                    messageElement.appendChild(img);
-                }
-                
-                messagesContainer.appendChild(messageElement);
+                displayMessage(doc.data());
             });
             scrollToBottom();
         });
 }
 
-// Função para abrir a câmera
-cameraButton.addEventListener('click', async () => {
-    cameraModal.style.display = 'block';
-    sendPhotoButton.style.display = 'none';
-    captureButton.style.display = 'block';
+// Exibe uma mensagem no chat
+function displayMessage(message) {
+    const messageElement = document.createElement('div');
+    messageElement.className = 'message';
+    messageElement.innerHTML = `<strong>${message.userName}:</strong> ${message.content || ''}`;
     
+    if (message.photoUrl) {
+        const img = document.createElement('img');
+        img.src = message.photoUrl;
+        img.className = 'photo-message';
+        img.alt = 'Foto enviada';
+        messageElement.appendChild(img);
+    }
+    
+    messagesContainer.appendChild(messageElement);
+}
+
+// Configura e abre a câmera
+async function openCamera() {
     try {
-        // Para qualquer stream anterior
+        cameraModal.style.display = 'block';
+        sendPhotoButton.style.display = 'none';
+        captureButton.style.display = 'block';
+        
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
         }
         
-        // Inicia nova stream de vídeo
         stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' } 
+            video: { facingMode: 'environment', width: 1280, height: 720 } 
         });
         video.srcObject = stream;
     } catch (error) {
-        console.error("Erro ao acessar a câmera:", error);
-        alert("Não foi possível acessar a câmera. Verifique as permissões.");
-        cameraModal.style.display = 'none';
+        console.error('Erro ao acessar câmera:', error);
+        alert('Não foi possível acessar a câmera. Verifique as permissões.');
+        closeCamera();
     }
-});
+}
 
-// Função para capturar foto
-captureButton.addEventListener('click', () => {
-    // Ajusta o canvas para o tamanho do vídeo
+// Captura foto da câmera
+function capturePhoto() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     
-    // Desenha o frame atual no canvas
     const context = canvas.getContext('2d');
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    // Mostra o botão de enviar e esconde o de capturar
     captureButton.style.display = 'none';
     sendPhotoButton.style.display = 'block';
     
-    // Para a câmera
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
+        stream = null;
     }
-});
+}
 
-// Função para enviar foto
-sendPhotoButton.addEventListener('click', async () => {
+// Envia foto capturada
+async function sendPhoto() {
     if (!currentUser.name) return;
-    
+
     try {
         // Converte canvas para blob
-        canvas.toBlob(async (blob) => {
-            try {
-                // Faz upload para o Storage
-                const storageRef = storage.ref();
-                const photoRef = storageRef.child(`photos/${Date.now()}_${currentUser.id}.jpg`);
-                await photoRef.put(blob);
-                
-                // Obtém URL da foto
-                const photoUrl = await photoRef.getDownloadURL();
-                
-                // Envia mensagem com a foto
-                await db.collection('messages').add({
-                    userId: currentUser.id,
-                    userName: currentUser.name,
-                    photoUrl: photoUrl,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                // Fecha o modal
-                cameraModal.style.display = 'none';
-                
-            } catch (error) {
-                console.error("Erro no upload:", error);
-                alert("Erro ao enviar foto. Tente novamente.");
-            }
-        }, 'image/jpeg', 0.8);
-        
-    } catch (error) {
-        console.error("Erro ao processar foto:", error);
-    }
-});
+        const blob = await new Promise((resolve) => {
+            canvas.toBlob(resolve, 'image/jpeg', 0.8);
+        });
 
-// Função para cancelar foto
-cancelCameraButton.addEventListener('click', () => {
+        // Faz upload para o Storage
+        const storageRef = storage.ref();
+        const photoRef = storageRef.child(`photos/${Date.now()}_${currentUser.id}.jpg`);
+        await photoRef.put(blob);
+        
+        // Obtém URL e envia mensagem
+        const photoUrl = await photoRef.getDownloadURL();
+        
+        await db.collection('messages').add({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            photoUrl: photoUrl,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        closeCamera();
+    } catch (error) {
+        console.error('Erro ao enviar foto:', error);
+        alert('Erro ao enviar foto. Tente novamente.');
+    }
+}
+
+// Fecha a câmera
+function closeCamera() {
     cameraModal.style.display = 'none';
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
         stream = null;
     }
-});
+}
 
-// Função para rolar para baixo
+// Rola chat para baixo
 function scrollToBottom() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// Event listeners
-sendButton.addEventListener('click', sendMessage);
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
-});
-
-// Foco automático
-if (currentUser.name) {
-    messageInput.focus();
-} else {
-    userNameInput.focus();
-}
+// Inicia o aplicativo
+init();
