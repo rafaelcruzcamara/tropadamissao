@@ -7,9 +7,33 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Modal para criar usuário -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <h2>Crie seu usuário</h2>
+            <input type="text" id="userNameInput" placeholder="Seu nome" autofocus>
+            <button id="saveUserButton">Entrar no Chat</button>
+        </div>
+    </div>
+
+    <!-- Área da câmera -->
+    <div id="cameraModal" class="modal">
+        <div class="modal-content">
+            <h2>Tire uma foto</h2>
+            <video id="video" autoplay></video>
+            <canvas id="canvas" style="display:none;"></canvas>
+            <div class="camera-buttons">
+                <button id="captureButton">Capturar Foto</button>
+                <button id="cancelCameraButton">Cancelar</button>
+                <button id="sendPhotoButton" style="display:none;">Enviar Foto</button>
+            </div>
+        </div>
+    </div>
+
     <div class="chat-container">
         <div class="messages" id="messagesContainer"></div>
         <div class="input-area fixed">
+            <button id="cameraButton" title="Enviar foto">📷</button>
             <input type="text" id="messageInput" placeholder="Escreva sua mensagem...">
             <button id="sendButton">Enviar</button>
         </div>
@@ -17,6 +41,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-storage-compat.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
