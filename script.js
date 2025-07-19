@@ -15,98 +15,125 @@ const db = firebase.firestore();
 const storage = firebase.storage();
 
 // Elementos do DOM
-const messagesContainer = document.getElementById('messagesContainer');
-const messageInput = document.getElementById('messageInput');
-const sendButton = document.getElementById('sendButton');
-const cameraButton = document.getElementById('cameraButton');
-const userModal = document.getElementById('userModal');
-const userNameInput = document.getElementById('userNameInput');
-const saveUserButton = document.getElementById('saveUserButton');
-const cameraModal = document.getElementById('cameraModal');
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const captureButton = document.getElementById('captureButton');
-const cancelCameraButton = document.getElementById('cancelCameraButton');
-const sendPhotoButton = document.getElementById('sendPhotoButton');
-const editUserButton = document.getElementById('editUserButton');
-
-// Estado do aplicativo
-let currentUser = {
-    id: localStorage.getItem('userId') || 'user_' + Math.random().toString(36).substr(2, 9),
-    name: localStorage.getItem('userName') || null
+const elements = {
+    userModal: document.getElementById('userModal'),
+    userNameInput: document.getElementById('userNameInput'),
+    saveUserBtn: document.getElementById('saveUserBtn'),
+    avatarUpload: document.getElementById('avatarUpload'),
+    avatarPreview: document.getElementById('avatarPreview'),
+    currentUserAvatar: document.getElementById('currentUserAvatar'),
+    currentUserName: document.getElementById('currentUserName'),
+    editProfileBtn: document.getElementById('editProfileBtn'),
+    messagesContainer: document.getElementById('messagesContainer'),
+    messageInput: document.getElementById('messageInput'),
+    sendBtn: document.getElementById('sendBtn'),
+    cameraBtn: document.getElementById('cameraBtn')
 };
-let stream = null;
-let isEditingUser = false;
+
+// Estado do usuário
+const user = {
+    id: localStorage.getItem('userId') || 'user_' + Math.random().toString(36).substr(2, 9),
+    name: localStorage.getItem('userName') || null,
+    avatar: localStorage.getItem('userAvatar') || null
+};
 
 // Inicialização
 function init() {
     setupEventListeners();
     
-    if (!currentUser.name) {
-        showUserModal(false);
+    if (!user.name) {
+        showUserModal();
     } else {
+        updateUserUI();
         loadMessages();
-        messageInput.focus();
     }
 }
 
-// Configura todos os event listeners
+// Configura listeners
 function setupEventListeners() {
-    // Envio de mensagem
-    sendButton.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keypress', (e) => {
+    // Usuário
+    elements.saveUserBtn.addEventListener('click', saveUser);
+    elements.editProfileBtn.addEventListener('click', () => showUserModal(true));
+    elements.avatarUpload.addEventListener('change', uploadAvatar);
+    
+    // Mensagens
+    elements.sendBtn.addEventListener('click', sendMessage);
+    elements.messageInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
-
+    
     // Câmera
-    cameraButton.addEventListener('click', openCamera);
-    captureButton.addEventListener('click', capturePhoto);
-    sendPhotoButton.addEventListener('click', sendPhoto);
-    cancelCameraButton.addEventListener('click', closeCamera);
-
-    // Usuário
-    saveUserButton.addEventListener('click', saveUser);
-    editUserButton.addEventListener('click', () => showUserModal(true));
+    elements.cameraBtn.addEventListener('click', () => {
+        alert('Funcionalidade de câmera será implementada na próxima versão');
+    });
 }
 
-// Mostra o modal de usuário
-function showUserModal(editing) {
-    isEditingUser = editing;
-    userModal.style.display = 'block';
-    userNameInput.value = currentUser.name || '';
-    saveUserButton.textContent = editing ? 'Salvar Alterações' : 'Entrar no Chat';
-    userNameInput.focus();
+// Funções do usuário
+function showUserModal(isEditing = false) {
+    elements.userModal.style.display = 'flex';
+    elements.userNameInput.value = user.name || '';
+    updateAvatarPreview();
     
-    if (editing) {
-        userNameInput.select();
+    if (isEditing) {
+        elements.userNameInput.select();
     }
 }
 
-// Salva ou atualiza o usuário
-async function saveUser() {
-    const newName = userNameInput.value.trim();
+function updateAvatarPreview() {
+    if (user.avatar) {
+        elements.avatarPreview.style.backgroundImage = `url(${user.avatar})`;
+        elements.avatarPreview.textContent = '';
+    } else {
+        elements.avatarPreview.style.backgroundImage = '';
+        elements.avatarPreview.textContent = getInitials(user.name);
+    }
+}
+
+function updateUserUI() {
+    elements.currentUserName.textContent = user.name || 'Usuário';
     
-    if (!newName) {
+    if (user.avatar) {
+        elements.currentUserAvatar.style.backgroundImage = `url(${user.avatar})`;
+        elements.currentUserAvatar.textContent = '';
+    } else {
+        elements.currentUserAvatar.style.backgroundImage = '';
+        elements.currentUserAvatar.textContent = getInitials(user.name);
+    }
+}
+
+function getInitials(name) {
+    if (!name) return '?';
+    return name.split(' ')
+        .filter(part => part.length > 0)
+        .map(part => part[0].toUpperCase())
+        .join('')
+        .substring(0, 2);
+}
+
+async function saveUser() {
+    const name = elements.userNameInput.value.trim();
+    if (!name) {
         alert('Por favor, digite um nome válido');
         return;
     }
 
     try {
-        // Atualiza o localStorage
-        currentUser.name = newName;
-        localStorage.setItem('userId', currentUser.id);
-        localStorage.setItem('userName', newName);
-
-        // Se estiver editando, atualiza as mensagens existentes
-        if (isEditingUser) {
-            await updateExistingMessages(newName);
+        // Atualiza o usuário
+        user.name = name;
+        localStorage.setItem('userId', user.id);
+        localStorage.setItem('userName', name);
+        
+        if (user.avatar) {
+            localStorage.setItem('userAvatar', user.avatar);
         }
 
-        userModal.style.display = 'none';
+        // Fecha o modal e atualiza a UI
+        elements.userModal.style.display = 'none';
+        updateUserUI();
         
-        if (!isEditingUser) {
+        // Se for novo usuário, carrega as mensagens
+        if (!elements.messagesContainer.hasChildNodes()) {
             loadMessages();
-            messageInput.focus();
         }
     } catch (error) {
         console.error('Erro ao salvar usuário:', error);
@@ -114,159 +141,107 @@ async function saveUser() {
     }
 }
 
-// Atualiza mensagens existentes com novo nome
-async function updateExistingMessages(newName) {
+async function uploadAvatar(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
     try {
-        const messages = await db.collection('messages')
-            .where('userId', '==', currentUser.id)
-            .get();
+        // Mostra preview
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            user.avatar = event.target.result;
+            updateAvatarPreview();
+        };
+        reader.readAsDataURL(file);
 
-        const batch = db.batch();
-        messages.forEach(doc => {
-            batch.update(doc.ref, { userName: newName });
-        });
-
-        await batch.commit();
+        // Faz upload para o Firebase Storage
+        const storageRef = storage.ref();
+        const fileRef = storageRef.child(`avatars/${user.id}`);
+        await fileRef.put(file);
+        const downloadURL = await fileRef.getDownloadURL();
+        user.avatar = downloadURL;
+        localStorage.setItem('userAvatar', downloadURL);
     } catch (error) {
-        console.error('Erro ao atualizar mensagens:', error);
-        throw error;
+        console.error('Erro ao carregar avatar:', error);
+        alert('Erro ao carregar foto. Tente novamente.');
     }
 }
 
-// Envia mensagem de texto
-async function sendMessage() {
-    const text = messageInput.value.trim();
+// Funções de mensagem
+function loadMessages() {
+    db.collection('messages')
+        .orderBy('timestamp')
+        .onSnapshot(snapshot => {
+            elements.messagesContainer.innerHTML = '';
+            snapshot.forEach(doc => {
+                displayMessage(doc.data());
+            });
+            scrollToBottom();
+        }, error => {
+            console.error('Erro ao carregar mensagens:', error);
+        });
+}
+
+function displayMessage(message) {
+    const isCurrentUser = message.userId === user.id;
+    const messageElement = document.createElement('div');
+    messageElement.className = `message ${isCurrentUser ? 'sent' : 'received'}`;
     
-    if (!text || !currentUser.name) return;
+    // Avatar (para mensagens recebidas)
+    if (!isCurrentUser) {
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        
+        if (message.userAvatar) {
+            avatar.style.backgroundImage = `url(${message.userAvatar})`;
+        } else {
+            avatar.textContent = getInitials(message.userName);
+        }
+        
+        messageElement.appendChild(avatar);
+    }
+    
+    // Conteúdo da mensagem
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    content.textContent = message.content;
+    messageElement.appendChild(content);
+    
+    // Timestamp
+    const time = document.createElement('div');
+    time.className = 'message-time';
+    time.textContent = formatTime(message.timestamp?.toDate() || new Date());
+    messageElement.appendChild(time);
+    
+    elements.messagesContainer.appendChild(messageElement);
+}
+
+function formatTime(date) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+async function sendMessage() {
+    const text = elements.messageInput.value.trim();
+    if (!text || !user.name) return;
 
     try {
         await db.collection('messages').add({
-            userId: currentUser.id,
-            userName: currentUser.name,
+            userId: user.id,
+            userName: user.name,
+            userAvatar: user.avatar,
             content: text,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-        messageInput.value = '';
+        elements.messageInput.value = '';
     } catch (error) {
         console.error('Erro ao enviar mensagem:', error);
         alert('Erro ao enviar mensagem. Tente novamente.');
     }
 }
 
-// Carrega mensagens do chat
-function loadMessages() {
-    db.collection('messages')
-        .orderBy('timestamp')
-        .onSnapshot(snapshot => {
-            messagesContainer.innerHTML = '';
-            snapshot.forEach(doc => {
-                displayMessage(doc.data());
-            });
-            scrollToBottom();
-        });
-}
-
-// Exibe uma mensagem no chat
-function displayMessage(message) {
-    const messageElement = document.createElement('div');
-    messageElement.className = 'message';
-    messageElement.innerHTML = `<strong>${message.userName}:</strong> ${message.content || ''}`;
-    
-    if (message.photoUrl) {
-        const img = document.createElement('img');
-        img.src = message.photoUrl;
-        img.className = 'photo-message';
-        img.alt = 'Foto enviada';
-        messageElement.appendChild(img);
-    }
-    
-    messagesContainer.appendChild(messageElement);
-}
-
-// Configura e abre a câmera
-async function openCamera() {
-    try {
-        cameraModal.style.display = 'block';
-        sendPhotoButton.style.display = 'none';
-        captureButton.style.display = 'block';
-        
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-        
-        stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment', width: 1280, height: 720 } 
-        });
-        video.srcObject = stream;
-    } catch (error) {
-        console.error('Erro ao acessar câmera:', error);
-        alert('Não foi possível acessar a câmera. Verifique as permissões.');
-        closeCamera();
-    }
-}
-
-// Captura foto da câmera
-function capturePhoto() {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    const context = canvas.getContext('2d');
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    captureButton.style.display = 'none';
-    sendPhotoButton.style.display = 'block';
-    
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-    }
-}
-
-// Envia foto capturada
-async function sendPhoto() {
-    if (!currentUser.name) return;
-
-    try {
-        // Converte canvas para blob
-        const blob = await new Promise((resolve) => {
-            canvas.toBlob(resolve, 'image/jpeg', 0.8);
-        });
-
-        // Faz upload para o Storage
-        const storageRef = storage.ref();
-        const photoRef = storageRef.child(`photos/${Date.now()}_${currentUser.id}.jpg`);
-        await photoRef.put(blob);
-        
-        // Obtém URL e envia mensagem
-        const photoUrl = await photoRef.getDownloadURL();
-        
-        await db.collection('messages').add({
-            userId: currentUser.id,
-            userName: currentUser.name,
-            photoUrl: photoUrl,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        closeCamera();
-    } catch (error) {
-        console.error('Erro ao enviar foto:', error);
-        alert('Erro ao enviar foto. Tente novamente.');
-    }
-}
-
-// Fecha a câmera
-function closeCamera() {
-    cameraModal.style.display = 'none';
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-    }
-}
-
-// Rola chat para baixo
 function scrollToBottom() {
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
 }
 
-// Inicia o aplicativo
+// Inicia o app
 init();
