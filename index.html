@@ -3,43 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat Fixo</title>
+    <title>Chat Dark</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Adicione este botão no chat-container, após o input-area -->
-<div class="user-controls">
-    <button id="editUserButton">Editar Perfil</button>
-</div>
-    <!-- Modal para criar usuário -->
+    <!-- Modal de usuário -->
     <div id="userModal" class="modal">
         <div class="modal-content">
-            <h2>Crie seu usuário</h2>
-            <input type="text" id="userNameInput" placeholder="Seu nome" autofocus>
-            <button id="saveUserButton">Entrar no Chat</button>
-        </div>
-    </div>
-
-    <!-- Área da câmera -->
-    <div id="cameraModal" class="modal">
-        <div class="modal-content">
-            <h2>Tire uma foto</h2>
-            <video id="video" autoplay></video>
-            <canvas id="canvas" style="display:none;"></canvas>
-            <div class="camera-buttons">
-                <button id="captureButton">Capturar Foto</button>
-                <button id="cancelCameraButton">Cancelar</button>
-                <button id="sendPhotoButton" style="display:none;">Enviar Foto</button>
+            <div class="profile-container">
+                <div id="avatarPreview" class="avatar"></div>
+                <label for="avatarUpload" class="upload-btn">
+                    <i class="fas fa-camera"></i>
+                </label>
+                <input type="file" id="avatarUpload" accept="image/*">
             </div>
+            <input type="text" id="userNameInput" placeholder="Seu nome" autofocus>
+            <button id="saveUserBtn">Salvar</button>
         </div>
     </div>
 
+    <!-- Chat principal -->
     <div class="chat-container">
-        <div class="messages" id="messagesContainer"></div>
-        <div class="input-area fixed">
-            <button id="cameraButton" title="Enviar foto">📷</button>
-            <input type="text" id="messageInput" placeholder="Escreva sua mensagem...">
-            <button id="sendButton">Enviar</button>
+        <header>
+            <div class="user-avatar" id="currentUserAvatar"></div>
+            <h2 id="currentUserName">Usuário</h2>
+            <button id="editProfileBtn"><i class="fas fa-user-edit"></i></button>
+        </header>
+
+        <div class="messages" id="messagesContainer">
+            <!-- Mensagens aparecerão aqui -->
+        </div>
+
+        <div class="input-area">
+            <button id="cameraBtn"><i class="fas fa-camera"></i></button>
+            <input type="text" id="messageInput" placeholder="Digite uma mensagem...">
+            <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
         </div>
     </div>
 
